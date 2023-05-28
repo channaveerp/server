@@ -2,67 +2,87 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import userModel from '../models/user.js';
 
-const secret = 'test';
-
 // signin
-
 export const signin = async (req, res) => {
   const { email, password } = req.body;
   try {
     const oldUser = await userModel.findOne({ email: email });
 
-    if (!oldUser)
-      return res.status(404).json({ message: 'user doews not exist' });
-    const isOlderPassword = await bcrypt.compare(password, oldUser.password);
-    if (!isOlderPassword)
-      return res.status(404).json({ message: 'wrong credentials' });
+    if (!email || !password) {
+      return res.status(404).json({ message: 'Please fill data' });
+    }
+    if (!oldUser) {
+      return res.status(404).json({ message: 'User does not exist' });
+    }
 
-    // token
-    const token = await jwt.sign(
+    const isOlderPassword = await bcrypt.compare(password, oldUser.password);
+    if (!isOlderPassword) {
+      return res.status(401).json({ message: 'Wrong credentials' });
+    }
+
+    const token = jwt.sign(
       {
         email: oldUser.email,
-        password: oldUser.password,
+        userId: oldUser._id,
       },
-      secret,
+      process.env.JWT_SECRET,
       { expiresIn: '1h' }
     );
 
-    res.status(200).json({ oldUser, token });
+    res.status(200).json({ user: oldUser, token: token });
   } catch (err) {
-    console.log(err.message);
+    console.error(err.message);
+    res.status(500).json({ message: 'Something went wrong' });
   }
 };
 
+// signup
 export const signup = async (req, res) => {
   const { email, password, firstName, lastName } = req.body;
 
   try {
-    //    if user is already existed
-    const olduser = await userModel.findOne({ email });
-    if (olduser) {
-      return res.status(400).json({ message: 'user already exists' });
+    const existingUser = await userModel.findOne({ email: email });
+    if (existingUser) {
+      return res.status(404).json({ message: 'User already exists' });
     }
-    //  password hashing
-    const passwordHash = await bcrypt.hash(password, 12);
-    // create new user
-    const newuser = await userModel.create({
+
+    const hashedPassword = await bcrypt.hash(password, 12);
+    const newUser = await userModel.create({
       email,
-      password: passwordHash,
+      password: hashedPassword,
       name: `${firstName} ${lastName}`,
     });
-    // creating jwt token
-    const token = await jwt.sign(
-      {
-        email: newuser.email,
-        id: newuser._id,
-      },
 
+    const token = jwt.sign(
+      {
+        email: newUser.email,
+        userId: newUser._id,
+      },
+      process.env.JWT_SECRET,
       { expiresIn: '1h' }
     );
-    //  sending user created response
-    res.status(201).json({ newuser, token });
+
+    res.status(201).json({ user: newUser, token: token });
   } catch (err) {
-    res.status(500).json({ message: 'something went wrong' });
-    console.error(err);
+    console.error(err.message);
+    res.status(500).json({ message: 'Something went wrong' });
+  }
+};
+
+export const googleSignIn = async (req, res, next) => {
+  const { name, email, token, googleId } = req.body;
+  try {
+    const oldUser = await userModel.findOne({ email });
+    if (oldUser) {
+      const result = { _id: oldUser._id.toString(), email, name };
+      return res.status(200).json({ result, token });
+    }
+    const result = await userModel.create({ email, name, googleId });
+    res
+      .status(200)
+      .json({ result, token, message: 'new google user creted successfully' });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ message: 'Something went wrong' });
   }
 };

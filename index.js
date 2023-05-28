@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import cors from 'cors';
 import morgan from 'morgan';
 import userRoute from './routes/user.js';
+import TourRouter from './routes/tour.js';
 import dotenv from 'dotenv';
 
 const app = express();
@@ -21,6 +22,7 @@ app.get('/', (req, res) => {
 app.use(express.json());
 
 app.use('/users', userRoute);
+app.use('/tour', TourRouter);
 
 mongoose
   .connect(process.env.MONGODB)
